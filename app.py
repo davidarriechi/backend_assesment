@@ -102,7 +102,7 @@ def get_factory_data(factory_id):
 def get_sprockets(sprocket_id):
     sprockets = Sprocket.query.filter_by(id=sprocket_id).first()
     if sprockets is None:
-        return jsonify({'message': 'Record not found'}), 404
+        return jsonify({'message': 'Sprocket not found'}), 404
     return jsonify(sprockets.serialize()), 200
 
 @app.route('/sprockets', methods=['POST'])
