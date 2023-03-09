@@ -1,5 +1,7 @@
+"""API that services requests for sprocket factory data and sprockets"""
+
 import os
-from flask import Flask, request, jsonify, current_app
+from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 
 POSTGRES_USER = os.environ.get("POSTGRES_USER")
@@ -8,12 +10,15 @@ POSTGRES_DB = os.environ.get("POSTGRES_DB")
 POSTGRES_HOST = os.environ.get("DB_HOST")
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:5432/{POSTGRES_DB}'
+app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{POSTGRES_USER}:\
+                {POSTGRES_PASSWORD}@{POSTGRES_HOST}:5432/{POSTGRES_DB}'
 db = SQLAlchemy(app)
+
 
 class Factory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=True)
+
 
 class ChartData(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -30,7 +35,7 @@ class Sprocket(db.Model):
     outside_diameter = db.Column(db.Integer, nullable=False)
     pitch_diameter = db.Column(db.Integer, nullable=False)
 
-    def serialize(self):
+    def _serialize(self):
         return {
             'id': self.id,
             'teeth': self.teeth,
@@ -46,32 +51,37 @@ def get_factories():
 
     if not factory_list:
         return jsonify({"error": "There are no factories"}), 404
-    
+
     response = {
-        "factories": list()
+        "factories": []
     }
 
     result = {}
     for factory in factory_list:
         if factory.factory_id not in result:
-            result[factory.factory_id] = {"factory_id": factory.factory_id, 
-                                            "chart_data": {
-                                                    "sprocket_production_actual": list(),
-                                                    "sprocket_production_goal": list(),
-                                                    "time": list()
-                                                }}
-        result[factory.factory_id]["chart_data"]["sprocket_production_actual"].append(factory.sprocket_production_actual)
-        result[factory.factory_id]["chart_data"]["sprocket_production_goal"].append(factory.sprocket_production_goal)
+            result[factory.factory_id] = {
+                "factory_id": factory.factory_id, 
+                "chart_data": {
+                    "sprocket_production_actual": [],
+                    "sprocket_production_goal": [],
+                    "time": []
+                            }}
+        result[factory.factory_id]["chart_data"]["sprocket_production_actual"]\
+            .append(factory.sprocket_production_actual)
+        result[factory.factory_id]["chart_data"]["sprocket_production_goal"]\
+            .append(factory.sprocket_production_goal)
         result[factory.factory_id]["chart_data"]["time"].append(factory.time)
 
-    for key, value in result.items():
+    for _, value in result.items():
         response["factories"].append({"factory": value})
 
     return jsonify(response)
 
+
 @app.route("/factories/<int:factory_id>", methods=['GET'])
 def get_factory_data(factory_id):
-    factory_data_list = db.session.query(ChartData).filter_by(factory_id=factory_id).all()
+    factory_data_list = db.session.query(ChartData)\
+        .filter_by(factory_id=factory_id).all()
 
     if not factory_data_list:
         return jsonify({"error": "Factory not found"}), 404
@@ -80,15 +90,14 @@ def get_factory_data(factory_id):
         "factory_id": factory_id,
     }
 
-    actual_production_list = list()
-    goal_production_list = list()
-    time_list = list()
+    actual_production_list = []
+    goal_production_list = []
+    time_list = []
 
     for factory_data in factory_data_list:
         actual_production_list.append(factory_data.sprocket_production_actual),
         goal_production_list.append(factory_data.sprocket_production_goal),
         time_list.append(factory_data.time)
-
 
     response["chart_data"] = {
         "sprocket_production_actual": actual_production_list,
@@ -98,12 +107,14 @@ def get_factory_data(factory_id):
 
     return jsonify(response)
 
+
 @app.route('/sprockets/<int:sprocket_id>', methods=['GET'])
 def get_sprockets(sprocket_id):
     sprockets = Sprocket.query.filter_by(id=sprocket_id).first()
     if sprockets is None:
         return jsonify({'message': 'Sprocket not found'}), 404
-    return jsonify(sprockets.serialize()), 200
+    return jsonify(sprockets._serialize()), 200
+
 
 @app.route('/sprockets', methods=['POST'])
 def create_sprocket():
@@ -111,10 +122,14 @@ def create_sprocket():
     pitch = request.json['pitch']
     outside_diameter = request.json['outside_diameter']
     pitch_diameter = request.json['pitch_diameter']
-    sprocket = Sprocket(teeth=teeth, pitch=pitch, outside_diameter=outside_diameter, pitch_diameter=pitch_diameter)
+    sprocket = Sprocket(teeth=teeth,
+                        pitch=pitch,
+                        outside_diameter=outside_diameter,
+                        pitch_diameter=pitch_diameter)
     db.session.add(sprocket)
     db.session.commit()
-    return jsonify(sprocket.serialize()), 201
+    return jsonify(sprocket._serialize()), 201
+
 
 @app.route('/sprockets/<int:sprocket_id>', methods=['PUT'])
 def update_sprocket(sprocket_id):
@@ -124,7 +139,7 @@ def update_sprocket(sprocket_id):
     sprocket.outside_diameter = request.json['outside_diameter']
     sprocket.pitch_diameter = request.json['pitch_diameter']
     db.session.commit()
-    return jsonify(sprocket.serialize())
+    return jsonify(sprocket._serialize())
 
 
 if __name__ == '__main__':
